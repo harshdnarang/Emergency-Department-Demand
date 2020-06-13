@@ -1,0 +1,257 @@
+---
+title: "Assignment2_submssion"
+output: html_document
+submitted by: Harshdeep Singh(218318242)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+setwd("C:/Users/HP/Desktop/statistical data analysis/A2")
+```
+
+
+Task 1.2
+
+```{r}
+library(httr)
+library(jsonlite)
+API_KEY = "CNFMPPBqDJgTGeUcngyGTnaiqtrUJABX"
+url = paste0("https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&startdate=2013-06-01&enddate=2014-02-05&locationid=CITY:AS000008&limit=1000&stationid=GHCND:ASN00009021")
+httpResponse <- GET(url, add_headers("token" = API_KEY), accept_json())
+data1 = fromJSON(content(httpResponse, "text"))
+#data= httpResponse$response$docs
+```
+
+```{r}
+API_KEY = "CNFMPPBqDJgTGeUcngyGTnaiqtrUJABX"
+url = paste0("https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GHCND&startdate=2014-02-06&enddate=2014-07-02&locationid=CITY:AS000008&limit=1000&stationid=GHCND:ASN00009021")
+httpResponse <- GET(url, add_headers("token" = API_KEY), accept_json())
+data2 = fromJSON(content(httpResponse, "text"))
+
+```
+
+```{r}
+data1<- data.frame(data1[["results"]])
+data2<- data.frame(data2[["results"]])
+
+nrow(rbind(data1,data2))
+
+```
+
+```{r}
+library(tidyverse)
+data1<-data1%>%select('date','datatype','value')
+tidy_weather1<-data1%>%spread(key='datatype',value)
+
+data2<-data2%>%select('date','datatype','value')
+tidy_weather2<-data2%>%spread(key='datatype',value)
+
+tidy_weather<-rbind(tidy_weather1,tidy_weather2)
+```
+
+
+Task 3 
+
+```{r}
+# Firsly dowloading and tidying ED data
+
+ed_data_link <- 'govhack3.csv'
+
+top_row <- read.csv(ed_data_link, col.names = FALSE , nrows = 1,header=FALSE)
+top_row<-top_row[top_row[,1]!="",1]
+
+second_row <- read.csv(ed_data_link, nrows = 1)
+
+column_names <- second_row %>% unlist(., use.names=FALSE) %>% as.character()%>%
+  make.unique(., sep = "__") # double underscore
+
+column_names[2:8] <- str_c(column_names[2:8], '0', sep='__')
+
+daily_attendance <- read_csv(ed_data_link, skip = 2, col_names = column_names)
+
+tidy1 <- daily_attendance %>% 
+  gather(key='All',value,Attendance__0:Tri_5__8)%>%separate(col='All', into=c('All','Hospital'),sep='__')%>%spread(key='All',value)%>%arrange(Hospital, Date)
+
+# fixing variable types
+
+tidy2<-tidy1%>%mutate(Hospital = factor(Hospital),
+         Admissions =as.integer(Admissions),Attendance=as.integer(Attendance),Tri_1=as.integer(Tri_1),Tri_2=as.integer(Tri_2),Tri_3=as.integer(Tri_3),Tri_4=as.integer(Tri_4),Tri_5=as.integer(Tri_5),Date = as.Date(Date, "%d-%B-%Y"))
+
+#Arranging data in chronological order
+tidy_EDdata<-tidy2%>%arrange(Hospital,Date)
+Hospital=tidy_EDdata$Hospital
+
+```
+
+Task 3.1.1 - Selecting Hospital
+
+```{r}
+picked_hos<-tidy_EDdata[Hospital==1,]
+print(top_row[2])
+```
+Task 3.1.2 - Fitting linear model
+
+```{r}
+picked_hos<- picked_hos%>%mutate(num_Date=as.numeric(picked_hos$Date))
+```
+
+```{r}
+lmfit <- lm(Attendance ~ num_Date, 
+            data = picked_hos)
+lmfit %>% 
+  summary
+```
+
+```{r}
+# plotting linear model
+plot(lmfit)
+
+plot(picked_hos$Date,picked_hos$Attendance)
+abline(lmfit)
+```
+Task 3.1.3 - Fitting Generalised additive model
+
+
+```{r}
+library(mgcv)   ## load the package
+library(gamair) ## load the data package
+
+ct1 <- gam(Attendance ~ s(num_Date),
+           data=picked_hos)
+ct1%>%summary()
+print(paste0('AIC = ',AIC(ct1)))
+```
+
+```{r}
+plot(ct1, residuals = TRUE, pch=1,scheme=1)
+gam.check(ct1)
+#install.packages('DHARMa')
+#library(DHARMa)
+#res = simulateResiduals(ct1)
+#plot(res)
+```
+Task 3.1.4 - Adding weekly seasonality
+
+```{r}
+# mutating to add weekday
+
+library(lubridate)
+picked_hos<-picked_hos%>%mutate(wkday=factor(wday(Date, label = TRUE), ordered = FALSE ))
+```
+
+```{r}
+# fitting gam
+
+ct2<-gam(Attendance ~ s(num_Date, by = wkday)+wkday,
+           data=picked_hos)
+ct2%>%summary()
+print(paste0('AIC = ',AIC(ct2)))
+```
+
+```{r}
+
+plot(ct2, residuals = TRUE, pch=1, scheme = 1)
+gam.check(ct2)
+#res = simulateResiduals(ct2)
+#plot(res)
+```
+
+3.1.6
+
+With categorical Weekly seasonality
+```{r}
+ct2_cat<-gam(Attendance ~ s(num_Date)+wkday,
+           data=picked_hos)
+ct2_cat%>%summary()
+print(paste0('AIC = ',AIC(ct2_cat)))
+
+```
+
+```{r}
+plot(ct2_cat, residuals = TRUE, pch=1, scheme = 1)
+gam.check(ct2_cat)
+```
+
+Optional Task 3.2
+
+```{r}
+# using map Function
+
+tidy_EDdata<-tidy_EDdata%>%mutate(wkday=factor(wday(Date, label = TRUE), ordered = FALSE ),num_Date = as.numeric(Date))
+
+by_hos <- tidy_EDdata %>% group_by(Hospital) %>% nest()
+
+
+hos_model <- function(tidy_EDdata){
+  gam(Attendance ~ s(num_Date)+wkday,
+           data=tidy_EDdata)
+}
+
+by_hos <- by_hos %>% mutate(models = map(data, hos_model))
+
+plotss <- function(m,h){
+  plot(m,residuals = TRUE, pch = 1, scheme = 1, main = top_row[h])
+}
+
+by_hos <- by_hos %>% mutate(plots = map2(models,Hospital,plotss))
+
+```
+
+Task 4.1 - Calculating and plotting EHF
+
+```{r}
+#using window functions
+
+library(RcppRoll)
+t <- tidy_weather$TAVG
+t_95 <- quantile(t, c(.95))
+
+EHF_sig <- roll_meanl(t,3)-t_95
+EHF_accl <- roll_meanl(t,3)-roll_meanr(lag(t),30)
+
+EHF_sig[EHF_sig<0] <- 0
+EHF_accl[EHF_accl<1] <- 1
+EHF <- EHF_sig*EHF_accl
+EHF <- EHF[complete.cases(EHF)]
+```
+
+
+```{r}
+plot(picked_hos$Date,EHF)
+```
+Task 4.2- Adding EHF factor to the model
+
+```{r}
+ct3<-gam(Attendance ~ s(num_Date, by = wkday) + wkday +s(EHF),
+           data=picked_hos)
+ct3%>%summary()
+print(paste0('AIC = ',AIC(ct3)))
+```
+
+```{r}
+plot(ct3,residuals = TRUE, pch = 1, scheme = 1)
+gam.check(ct3)
+```
+Optional Task 4.3 - Adding  Precipitaion
+
+```{r}
+prcp <- tidy_weather$PRCP[31:395]
+
+ct4<-gam(Attendance ~ s(num_Date, by = wkday) + wkday +s(EHF) +s(prcp),
+           data=picked_hos)
+ct4%>%summary()
+print(paste0('AIC = ',AIC(ct4)))
+```
+
+```{r}
+plot(ct4,residuals = TRUE, pch = 1, scheme = 1)
+gam.check(ct4)
+```
+
+
+
