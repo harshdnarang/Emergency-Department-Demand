@@ -1,0 +1,203 @@
+---
+title: "Assignment 1"
+output: html_document
+---
+
+```{r}
+setwd("C:/Users/HP/Desktop/statistical data analysis/A1")
+```
+
+
+##Task 2.1
+
+```{r}
+install.packages("tidyverse")
+library(tidyverse)
+ed_data_link <- 'govhack3.csv'
+
+top_row <- read.csv(ed_data_link, col.names = FALSE , nrows = 1,header=FALSE)
+top_row<-top_row[top_row[,1]!="",1]
+
+second_row <- read.csv(ed_data_link, nrows = 1)
+
+column_names <- second_row %>% unlist(., use.names=FALSE) %>% as.character()%>%
+  make.unique(., sep = "__") # double underscore
+
+column_names[2:8] <- str_c(column_names[2:8], '0', sep='__')
+
+daily_attendance <- read_csv(ed_data_link, skip = 2, col_names = column_names)
+
+sapply(daily_attendance,class) # data types of columns
+
+top_row   # list of hospitals
+```
+##Task 2.2
+
+Make the data tidy using tidyverse gathering and spreading operations
+Fixing variable types
+Arranging data in chronological order
+```{r}
+tidy1 <- daily_attendance %>% 
+  gather(key='All',value,Attendance__0:Tri_5__8)%>%separate(col='All', into=c('All','Hospital'),sep='__')%>%spread(key='All',value)%>%arrange(Hospital, Date)
+
+# fixing variable types
+
+tidy2<-tidy1%>%mutate(Hospital = factor(Hospital),
+         Admissions =as.integer(Admissions),Attendance=as.integer(Attendance),Tri_1=as.integer(Tri_1),Tri_2=as.integer(Tri_2),Tri_3=as.integer(Tri_3),Tri_4=as.integer(Tri_4),Tri_5=as.integer(Tri_5),Date = as.Date(Date, "%d-%B-%Y"))
+
+#Arranging data in chronological order
+tidy_data<-tidy2%>%arrange(Hospital,Date)
+```
+Analyse the data and know which entries are complete and which entries contain NA values.
+```{r}
+Tri_1=tidy_data$Tri_1
+Tri_2=tidy_data$Tri_2
+Tri_3=tidy_data$Tri_3
+Tri_4=tidy_data$Tri_4
+Tri_5=tidy_data$Tri_5
+Admissions=tidy_data$Admissions
+Attendance=tidy_data$Attendance
+Hospital=tidy_data$Hospital
+
+length(Tri_1[is.na(Tri_1)])   #2600 incomplete entries
+length(Tri_2[is.na(Tri_2)])   #371 incomplete entries
+length(Tri_3[is.na(Tri_3)])   #85 incomplete entries
+length(Tri_4[is.na(Tri_4)])   #0 incomplete entries
+length(Tri_5[is.na(Tri_5)])   #448 incomplete entries
+length(Admissions[is.na(Admissions)])  #87 incomplete entries
+length(Attendance[is.na(Attendance)])  #0 incomplete entries
+
+nrow(tidy_data[complete.cases(tidy_data),]) # 601 complete entries
+
+
+#checking that in how many entries attendance is equal to sum of all triage from complete entries.
+
+complete<-tidy_data[complete.cases(tidy_data),]
+
+nrow(complete[(complete$Attendance==complete$Tri_1+complete$Tri_2+complete$Tri_3+complete$Tri_4+complete$Tri_5),])  #532 
+
+# from the above result we can safely assume that attendance is the sum of all triage and this can used to impute the NA values.
+
+```
+
+Imputations are done by taking account of above result i.e attendance=sum of all triage, and incorporating the fact that NA values are less than 3 as mentioned by the emergency department in the description of the data.
+
+```{r}
+############# imputations #############################33
+
+
+
+for(i in 1:nrow(tidy_data)){
+  if(is.na(Tri_1[i])&!is.na(Tri_2[i])&!is.na(Tri_3[i])&!is.na(Tri_4[i])&!is.na(Tri_5[i])){
+    k<-tidy_data$Attendance[i]-(tidy_data$Tri_2[i]+tidy_data$Tri_3[i]+tidy_data$Tri_4[i]+tidy_data$Tri_5[i])
+    if(k<3){tidy_data$Tri_1[i]<-k}
+    else{tidy_data$Tri_1[i]<-2}
+  }
+}
+
+Tri_1=tidy_data$Tri_1
+length(Tri_1[is.na(Tri_1)])  # reduced to 728 incomplete entries of Triage_1 from 2600
+
+nrow(tidy_data[complete.cases(tidy_data),]) #2472 complete cases
+
+
+nrow(tidy_data[!is.na(Tri_1)&!is.na(Tri_2)&!is.na(Tri_3)&!is.na(Tri_4)&is.na(Tri_5),])     # 84 rows contain only missing Triage_5 out of all Triage
+
+for(i in 1:nrow(tidy_data)){
+  if(!is.na(Tri_1[i])&!is.na(Tri_2[i])&!is.na(Tri_3[i])&!is.na(Tri_4[i])&is.na(Tri_5[i])){
+    k<-tidy_data$Attendance[i]-(tidy_data$Tri_2[i]+tidy_data$Tri_3[i]+tidy_data$Tri_4[i]+tidy_data$Tri_1[i])
+    if(k<3){tidy_data$Tri_5[i]<-k}
+    else{tidy_data$Tri_5[i]<-2}
+  }
+}
+
+Tri_5=tidy_data$Tri_5
+length(Tri_5[is.na(Tri_5)])  # 364 incomplete entries of Triage_5 from 448
+
+nrow(tidy_data[complete.cases(tidy_data),])  # 2556 complete cases
+
+
+# replacing the rest of NA values by Zero 
+
+tidy_data$Admissions[is.na(Admissions)]<-0
+tidy_data$Tri_1[is.na(Tri_1)]<-0
+tidy_data$Tri_2[is.na(Tri_2)]<-0
+tidy_data$Tri_3[is.na(Tri_3)]<-0
+tidy_data$Tri_4[is.na(Tri_4)]<-0
+tidy_data$Tri_5[is.na(Tri_5)]<-0
+
+```
+
+##Task 3.1
+
+```{r}
+Tri_1=tidy_data$Tri_1
+Tri_2=tidy_data$Tri_2
+Tri_3=tidy_data$Tri_3
+Tri_4=tidy_data$Tri_4
+Tri_5=tidy_data$Tri_5
+Admissions=tidy_data$Admissions
+Attendance=tidy_data$Attendance
+Hospital=tidy_data$Hospital
+Date=tidy_data$Date
+
+t<-tidy_data[Hospital==4,]
+print(top_row[5])
+print(paste0('Total Admissions:', sum(t$Admissions))) #39400 
+print(paste0('Total Attendances:',sum(t$Attendance))) #65871
+
+```
+
+##Task3.2
+```{r}
+t %>% 
+  ggplot(aes(x = t$Attendance)) +
+  geom_histogram(
+  )
+
+```
+
+##Task3.3
+```{r}
+t%>%mutate(day=weekdays(Date))%>%mutate(day=factor(day, levels= c( "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday")))%>%group_by(day)%>%summarise(mean(Attendance))%>%plot(xlab='',ylab='Attendace',las=2, main='Attendance average according to weekday ')
+
+```
+
+##Task3.4
+```{r}
+
+m=sapply(t[3:9],mean) # mean of each variable
+v=sapply(t[3:9],var) # variance of each variable
+
+m
+v
+```
+
+
+##Task 4.1
+
+```{r}
+install.packages('fitdistrplus')
+library(fitdistrplus)
+library(magrittr)
+
+estimate1 <- t %$%
+  fitdist(data = Tri_1, 
+          distr = "pois")
+
+estimate2 <- t %$%
+  fitdist(data = Tri_1, 
+          distr = "nbinom")
+
+t %>% 
+  ggplot(aes(x = t$Tri_1)) +
+  geom_histogram(
+  )
+estimate1[["loglik"]]
+estimate2[["loglik"]]
+
+estimate1 %>% plot
+estimate2 %>% plot
+
+```
+
