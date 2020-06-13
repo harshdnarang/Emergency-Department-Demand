@@ -4,11 +4,11 @@ The repository contains the admissions data from Victoria's various hospitals. T
 ## ----
 Triage categories are allocated to each patient based on an assessment of their presenting conditions, generally by the triage nurse, with triage 1 being the most urgent and triage 5 being the least urgent. (Triage 1: Resuscitation- immediate, within seconds; Triage 2: Emergency- within 10 minutes; Triage 3: Urgent- within 30 minutes; Triage 4: Semi-urgent- within 60 minutes; Triage 5: Non-urgent - within 120 minutes).
 ## -----
-The project was part of an assignment
+The project was part of an assignment.
 Rtudio can be used to see and run the code written in R. 
 
 Following statistical techniques are performed:
 
-Distribution fitting
-Use of 'Generalised linear models'
-Use of 'Generalised additive models'
+Distribution fitting,
+'Generalised linear models',
+'Generalised additive models'
